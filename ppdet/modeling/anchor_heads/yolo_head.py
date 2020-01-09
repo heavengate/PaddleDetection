@@ -33,6 +33,7 @@ class YOLOv3Head(object):
     Head block for YOLOv3 network
 
     Args:
+        conv_block_num (int): number of conv block in each detection block
         norm_decay (float): weight decay for normalization layer weights
         num_classes (int): number of output classes
         anchors (list): anchors
@@ -43,6 +44,7 @@ class YOLOv3Head(object):
     __shared__ = ['num_classes', 'weight_prefix_name']
 
     def __init__(self,
+                 conv_block_num=2,
                  norm_decay=0.,
                  num_classes=80,
                  anchors=[[10, 13], [16, 30], [33, 23], [30, 61], [62, 45],
@@ -56,6 +58,7 @@ class YOLOv3Head(object):
                      nms_threshold=0.45,
                      background_label=-1).__dict__,
                  weight_prefix_name=''):
+        self.conv_block_num = conv_block_num
         self.norm_decay = norm_decay
         self.num_classes = num_classes
         self.anchor_masks = anchor_masks
@@ -103,13 +106,18 @@ class YOLOv3Head(object):
             out = fluid.layers.leaky_relu(x=out, alpha=0.1)
         return out
 
-    def _detection_block(self, input, channel, is_test=True, name=None):
+    def _detection_block(self,
+                         input,
+                         channel,
+                         conv_block_num=2,
+                         is_test=True,
+                         name=None):
         assert channel % 2 == 0, \
             "channel {} cannot be divided by 2 in detection block {}" \
             .format(channel, name)
 
         conv = input
-        for j in range(2):
+        for j in range(conv_block_num):
             conv = self._conv_bn(
                 conv,
                 channel,
@@ -133,7 +141,7 @@ class YOLOv3Head(object):
             stride=1,
             padding=0,
             is_test=is_test,
-            name='{}.2'.format(name))
+            name='{}.{}'.format(name, conv_block_num))
         tip = self._conv_bn(
             route,
             channel * 2,
@@ -196,6 +204,7 @@ class YOLOv3Head(object):
             route, tip = self._detection_block(
                 block,
                 channel=512 // (2**i),
+                conv_block_num=self.conv_block_num,
                 is_test=(not is_train),
                 name=self.prefix_name + "yolo_block.{}".format(i))
 

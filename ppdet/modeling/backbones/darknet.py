@@ -168,3 +168,81 @@ class DarkNet(object):
                     ch_out=block.shape[1] * 2,
                     name=self.prefix_name + "stage.{}.downsample".format(i))
         return blocks
+
+
+@register
+class DarkNetTiny(DarkNet):
+    """
+    DarkNetTiny, see https://pjreddie.com/darknet/yolo, 1st version darknet config
+    Args:
+        depth (int): network depth, currently only darknet 8 is supported
+        norm_type (str): normalization type, 'bn' and 'sync_bn' are supported
+        norm_decay (float): weight decay for normalization layer weights
+    """
+    __shared__ = ['norm_type', 'weight_prefix_name']
+
+    def __init__(self,
+                 depth=8,
+                 norm_type='bn',
+                 norm_decay=0.,
+                 weight_prefix_name=''):
+        assert depth in [8], "unsupported depth value"
+        self.depth = depth
+        self.norm_type = norm_type
+        self.norm_decay = norm_decay
+        self.depth_cfg = {8: ([1, 1, 1, 1, 1, 1], self.tinyblock)}
+
+    def _max_pool(self, input, pool_size=2, stride=2, name=None):
+        return fluid.layers.pool2d(
+            input,
+            pool_size=pool_size,
+            pool_type='max',
+            pool_stride=stride,
+            pool_padding=0,
+            name=name)
+
+    def tinyblock(self, input, ch_out, name=None):
+        return self._conv_norm(
+            input, ch_out=ch_out, filter_size=3, stride=1, padding=0, name=name)
+
+    def __call__(self, input):
+        """
+        Get the backbone of DarkNetTiny, that is output for the 6 stages.
+
+        Args:
+            input (Variable): input variable.
+
+        Returns:
+            The last variables of each stage.
+        """
+        stages, block_func = self.depth_cfg[self.depth]
+        stages = stages[0:6]
+        conv = self._conv_norm(
+            input=input,
+            ch_out=16,
+            filter_size=3,
+            stride=1,
+            padding=1,
+            name=self.prefix_name + "yolo_input")
+        pool = self._max_pool(
+            input=conv,
+            pool_size=2,
+            pool_stride=2,
+            name=self.prefix_name + "yolo_input.downsample")
+        blocks = []
+        for i, stage in enumerate(stages):
+            block = self.layer_warp(
+                block_func=block_func,
+                input=pool,
+                ch_out=32 * 2**i,
+                count=stage,
+                name=self.prefix_name + "stage.{}".format(i))
+            blocks.append(block)
+            if i < len(stages) - 1:  # do not downsaple in the last stage
+                pool = self._max_pool(
+                    input=block,
+                    pool_size=2,
+                    # stride of the last max pool layer is 1
+                    pool_stride=2 if i < len(stage) - 2 else 1,
+                    name=self.prefix_name + "stage.{}.downsample".format(i))
+        return blocks
