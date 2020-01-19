@@ -36,7 +36,7 @@ The backbone models pretrained on ImageNet are available. All backbone models ar
 
 | Backbone                | Type           | Image/gpu | Lr schd | Inf time (fps) | Box AP | Mask AP |                           Download                           |
 | :---------------------- | :------------- | :-------: | :-----: | :------------: | :----: | :-----: | :----------------------------------------------------------: |
-| ResNet50                | Faster         |     1     |   1x    |     12.747     |  35.2  |    -    | [model](https://paddlemodels.bj.bcebos.com/object_detection/faster_rcnn_r50_1x.tar) |
+| ResNet50                | Faster         |     1     |   1x    |     12.747     |  35.2  |    -    | [model](https://paddlemodels.bj.bcebos.com/object_detection/faster_rcnn_r50_1x.tar)([cfg](../configs/faster_rcnn_r50_1x.yml)) |
 | ResNet50                | Faster         |     1     |   2x    |     12.686     |  37.1  |    -    | [model](https://paddlemodels.bj.bcebos.com/object_detection/faster_rcnn_r50_2x.tar) |
 | ResNet50                | Mask           |     1     |   1x    |     11.615     |  36.5  |  32.2   | [model](https://paddlemodels.bj.bcebos.com/object_detection/mask_rcnn_r50_1x.tar) |
 | ResNet50                | Mask           |     1     |   2x    |     11.494     |  38.2  |  33.4   | [model](https://paddlemodels.bj.bcebos.com/object_detection/mask_rcnn_r50_2x.tar) |
