@@ -23,6 +23,31 @@ import json
 import logging
 logger = logging.getLogger(__name__)
 
+DROP_LIST = [
+    ["patient2"],
+    ["patient3", "layer79"],
+    ["patient3", "layer80"],
+    ["patient3", "layer81"],
+    ["patient4", "layer236"],
+    ["patient7", "layer17"],
+    ["patient10", "layer7"],
+    ["patient12", "layer11"],
+    ["patient13", "layer5"],
+    ["patient17", "layer6"],
+    ["patient19"],
+    ["patient21"],
+    ["patient22"],
+    ["patient25"],
+    ["patient26", "layer22"],
+    ["patient26", "layer23"],
+    ["patient30"],
+    ["patient31", "layer8"],
+    ["patient31", "layer9"],
+    ["patient31", "layer18"],
+    ["patient32"],
+    ["patient38", "layer8"],
+]
+
 
 @register
 @serializable
@@ -99,6 +124,16 @@ class VOCDataSet(DataSet):
                 if not os.path.isfile(anno_file):
                     logger.warn("No json file {}".format(anno_file))
                     continue
+
+                drop_flag = False
+                for drops in DROP_LIST:
+                    drop_flag = all(
+                        [anno_file.find(drop) >= 0 for drop in drops])
+                    if drop_flag: break
+                if drop_flag:
+                    logger.info("Drop sample: {}".format(anno_file))
+                    continue
+
                 anno = json.load(open(anno_file))
                 # if not anno['labeled']:
                 #     logging.warn("{} not labeld".format(image))
