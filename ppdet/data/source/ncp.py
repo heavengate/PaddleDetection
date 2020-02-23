@@ -147,7 +147,8 @@ class VOCDataSet(DataSet):
                     rec['h'] = anno['size']['height']
                     rec['w'] = anno['size']['width']
 
-                objs = anno['object']
+                objs = anno['object'] if 'object' in anno else anno[
+                    'outputs'].get('object', None)
                 # uncomment this if not filter out 0 object sample
                 if not objs or len(objs) == 0:
                     continue
@@ -167,7 +168,7 @@ class VOCDataSet(DataSet):
                             float(obj['bbox']['xmax']),
                             float(obj['bbox']['ymax'])
                         ]
-                    else:
+                    elif 'polygon' in obj:
                         gt_bbox[i, :] = poly2xyxy(obj['polygon'])
                     gt_class[i][0] = int(self.with_background)
                     is_crowd[i][0] = 0
