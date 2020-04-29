@@ -31,7 +31,7 @@ def visualize_box_mask(im, results, labels, mask_resolution=14):
     Returns:
         im (PIL.Image.Image): visualized image  
     """
-    if im is str:
+    if isinstance(im, str):
         im = Image.open(im).convert('RGB')
     else:
         im = Image.fromarray(im)
