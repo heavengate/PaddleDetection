@@ -37,9 +37,16 @@ class IouAwareLoss(IouLoss):
         max_width (int): max width of input to support random shape input
     """
 
-    def __init__(self, loss_weight=1.0, max_height=608, max_width=608):
+    def __init__(self,
+                 loss_weight=1.0,
+                 max_height=608,
+                 max_width=608,
+                 scale_x_y=1.0):
         super(IouAwareLoss, self).__init__(
-            loss_weight=loss_weight, max_height=max_height, max_width=max_width)
+            loss_weight=loss_weight,
+            max_height=max_height,
+            max_width=max_width,
+            scale_x_y=scale_x_y)
 
     def __call__(self,
                  ioup,

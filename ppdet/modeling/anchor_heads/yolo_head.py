@@ -40,6 +40,7 @@ class YOLOv3Head(object):
     Head block for YOLOv3 network
 
     Args:
+        conv_block_num (int): number of conv block in each detection block
         norm_decay (float): weight decay for normalization layer weights
         num_classes (int): number of output classes
         anchors (list): anchors
@@ -50,14 +51,19 @@ class YOLOv3Head(object):
     __shared__ = ['num_classes', 'weight_prefix_name']
 
     def __init__(self,
+                 conv_block_num=0,
                  norm_decay=0.,
                  num_classes=80,
                  anchors=[[10, 13], [16, 30], [33, 23], [30, 61], [62, 45],
                           [59, 119], [116, 90], [156, 198], [373, 326]],
                  anchor_masks=[[6, 7, 8], [3, 4, 5], [0, 1, 2]],
                  drop_block=False,
+                 coord_conv=False,
+                 carafe_upsample=False,
+                 upsample='nearest',
                  iou_aware=False,
                  iou_aware_factor=0.4,
+                 scale_x_y=1.0,
                  block_size=3,
                  keep_prob=0.9,
                  yolo_loss="YOLOv3Loss",
@@ -69,9 +75,9 @@ class YOLOv3Head(object):
                      background_label=-1).__dict__,
                  weight_prefix_name='',
                  downsample=[32, 16, 8],
-                 scale_x_y=1.0,
                  clip_bbox=True):
         check_version('2.0.0')
+        self.conv_block_num = conv_block_num
         self.norm_decay = norm_decay
         self.num_classes = num_classes
         self.anchor_masks = anchor_masks
@@ -80,15 +86,35 @@ class YOLOv3Head(object):
         self.nms = nms
         self.prefix_name = weight_prefix_name
         self.drop_block = drop_block
+        self.coord_conv = coord_conv
+        self.carafe_upsample = carafe_upsample
+        self.upsample = upsample
         self.iou_aware = iou_aware
         self.iou_aware_factor = iou_aware_factor
+        self.scale_x_y = scale_x_y
         self.block_size = block_size
         self.keep_prob = keep_prob
+        self.downsample = downsample
+        self.clip_bbox = clip_bbox
         if isinstance(nms, dict):
             self.nms = MultiClassNMS(**nms)
-        self.downsample = downsample
-        self.scale_x_y = scale_x_y
-        self.clip_bbox = clip_bbox
+            # self.nms = MultiClassMatrixNMS(**nms)
+
+    def _add_coord(self, input):
+        input_shape = fluid.layers.shape(input)
+        b = input_shape[0]
+        h = input_shape[2]
+        w = input_shape[3]
+
+        x_range = fluid.layers.range(0, w, 1, 'float32') / (w - 1.)
+        x_range = x_range * 2. - 1.
+        x_range = fluid.layers.unsqueeze(x_range, [0, 1, 2])
+        x_range = fluid.layers.expand(x_range, [b, 1, h, 1])
+        x_range.stop_gradient = True
+        y_range = fluid.layers.transpose(x_range, [0, 1, 3, 2])
+        y_range.stop_gradient = True
+
+        return fluid.layers.concat([input, x_range, y_range], axis=1)
 
     def _conv_bn(self,
                  input,
@@ -99,6 +125,8 @@ class YOLOv3Head(object):
                  act='leaky',
                  is_test=True,
                  name=None):
+        if self.coord_conv:
+            input = self._add_coord(input)
         conv = fluid.layers.conv2d(
             input=input,
             num_filters=ch_out,
@@ -126,13 +154,19 @@ class YOLOv3Head(object):
             out = fluid.layers.leaky_relu(x=out, alpha=0.1)
         return out
 
-    def _detection_block(self, input, channel, is_test=True, name=None):
+    def _detection_block(self,
+                         input,
+                         channel,
+                         conv_block_num=2,
+                         is_test=True,
+                         is_first=False,
+                         name=None):
         assert channel % 2 == 0, \
             "channel {} cannot be divided by 2 in detection block {}" \
             .format(channel, name)
 
         conv = input
-        for j in range(2):
+        for j in range(conv_block_num):
             conv = self._conv_bn(
                 conv,
                 channel,
@@ -149,14 +183,15 @@ class YOLOv3Head(object):
                 padding=1,
                 is_test=is_test,
                 name='{}.{}.1'.format(name, j))
-            if self.drop_block and j == 0 and channel != 512:
+            if self.drop_block and j == 0 and channel != 256:
+                print("drop block enter")
                 conv = DropBlock(
                     conv,
                     block_size=self.block_size,
                     keep_prob=self.keep_prob,
                     is_test=is_test)
 
-        if self.drop_block and channel == 512:
+        if self.drop_block and channel == 256:
             conv = DropBlock(
                 conv,
                 block_size=self.block_size,
@@ -180,9 +215,24 @@ class YOLOv3Head(object):
             name='{}.tip'.format(name))
         return route, tip
 
-    def _upsample(self, input, scale=2, name=None):
-        out = fluid.layers.resize_nearest(
-            input=input, scale=float(scale), name=name)
+    def _upsample(self, input, scale=2, upsample='nearest', name=None):
+        if upsample == 'nearest':
+            out = fluid.layers.resize_nearest(
+                input=input, scale=float(scale), name=name)
+        else:
+            assert isinstance(
+                upsample, dict), "Unknown upsample method: {}".format(upsample)
+            upsample = upsample.copy()
+            assert upsample['type'] in [
+                'carafe'
+            ], 'Unknown upsample type {}'.format(upsample['type'])
+
+            upsample_type = upsample.pop('type')
+            upsample['name'] = name
+
+            if upsample_type.lower() == 'carafe':
+                up = CARAFEUpsample(**upsample)
+                out = up(input)
         return out
 
     def _parse_anchors(self, anchors):
@@ -231,8 +281,9 @@ class YOLOv3Head(object):
                 block = fluid.layers.concat(input=[route, block], axis=1)
             route, tip = self._detection_block(
                 block,
-                channel=512 // (2**i),
+                channel=256 // (2**i),
                 is_test=(not is_train),
+                conv_block_num=self.conv_block_num,
                 name=self.prefix_name + "yolo_block.{}".format(i))
 
             # out channel number = mask_num * (5 + class_num)
@@ -268,7 +319,10 @@ class YOLOv3Head(object):
                     is_test=(not is_train),
                     name=self.prefix_name + "yolo_transition.{}".format(i))
                 # upsample
-                route = self._upsample(route)
+                route = self._upsample(
+                    route,
+                    upsample=self.upsample,
+                    name="yolo_upsample.{}".format(i))
 
         return outputs
 

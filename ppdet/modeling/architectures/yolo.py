@@ -109,7 +109,7 @@ class YOLOv3(object):
             targets_def = {
                 'target0':  {'shape': [None, 3, 86, 19, 19],  'dtype': 'float32',   'lod_level': 0},
                 'target1':  {'shape': [None, 3, 86, 38, 38],  'dtype': 'float32',   'lod_level': 0},
-                'target2':  {'shape': [None, 3, 86, 76, 76],  'dtype': 'float32',   'lod_level': 0},
+                # 'target2':  {'shape': [None, 3, 86, 76, 76],  'dtype': 'float32',   'lod_level': 0},
             }
             # yapf: enable
 
@@ -139,7 +139,8 @@ class YOLOv3(object):
         # will be disabled for YOLOv3 architecture do not calculate loss in
         # eval/infer mode.
         if 'im_size' not in fields and self.use_fine_grained_loss:
-            fields.extend(['target0', 'target1', 'target2'])
+            # fields.extend(['target0', 'target1', 'target2'])
+            fields.extend(['target0', 'target1'])
         feed_vars = OrderedDict([(key, fluid.data(
             name=key,
             shape=inputs_def[key]['shape'],

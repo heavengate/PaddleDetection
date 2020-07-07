@@ -43,11 +43,13 @@ class IouLoss(object):
                  loss_weight=2.5,
                  max_height=608,
                  max_width=608,
+                 scale_x_y=1.0,
                  ciou_term=False,
                  loss_square=True):
         self._loss_weight = loss_weight
         self._MAX_HI = max_height
         self._MAX_WI = max_width
+        self._scale_x_y = scale_x_y
         self.ciou_term = ciou_term
         self.loss_square = loss_square
 
@@ -179,8 +181,13 @@ class IouLoss(object):
             cy.gradient = True
         else:
             dcx_sig = fluid.layers.sigmoid(dcx)
-            cx = fluid.layers.elementwise_add(dcx_sig, gi) / grid_x_act
             dcy_sig = fluid.layers.sigmoid(dcy)
+            if (abs(self._scale_x_y - 1.0) > 1e-10):
+                dcx_sig = self._scale_x_y * dcx_sig - 0.5 * (self._scale_x_y - 1
+                                                             )
+                dcy_sig = self._scale_x_y * dcy_sig - 0.5 * (self._scale_x_y - 1
+                                                             )
+            cx = fluid.layers.elementwise_add(dcx_sig, gi) / grid_x_act
             cy = fluid.layers.elementwise_add(dcy_sig, gj) / grid_y_act
 
         anchor_w_ = [anchors[i] for i in range(0, len(anchors)) if i % 2 == 0]
