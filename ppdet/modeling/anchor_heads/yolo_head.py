@@ -257,6 +257,9 @@ class YOLOv3Head(object):
                     keep_prob=self.keep_prob,
                     is_test=is_test)
 
+        if conv_block_num == 0 and is_first:
+            cpnv = self._spp_module(conv, is_test=is_test, name="spp")
+
         if self.drop_block and is_first:
             conv = DropBlock(
                 conv,
