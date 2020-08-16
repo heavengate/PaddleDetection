@@ -197,13 +197,13 @@ class DarkNetTiny(DarkNet):
         self.prefix_name = weight_prefix_name
         self.depth_cfg = {8: ([1, 1, 1, 1, 1], self.tinyblock)}
 
-    def _max_pool(self, input, pool_size=2, pool_stride=2, name=None):
+    def _max_pool(self, input, pool_size=2, pool_stride=2, pool_padding='SAME', name=None):
         return fluid.layers.pool2d(
             input,
             pool_size=pool_size,
             pool_type='max',
             pool_stride=pool_stride,
-            pool_padding='SAME',
+            pool_padding=pool_padding,
             name=name)
 
     def tinyblock(self, input, ch_out, name=None):
@@ -258,6 +258,7 @@ class DarkNetTiny(DarkNet):
                     # stride of the last max pool layer is 1
                     # pool_stride=2 if i < len(stages) - 2 else 1,
                     pool_stride=1,
+                    pool_padding=[0, 1, 0, 1],
                     name=self.prefix_name + "stage.{}.downsample".format(i))
                 block = self._conv_norm(
                     pool,

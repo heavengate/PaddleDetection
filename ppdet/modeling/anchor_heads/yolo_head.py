@@ -258,9 +258,11 @@ class YOLOv3Head(object):
                     is_test=is_test)
 
         if conv_block_num == 0 and is_first:
-            cpnv = self._spp_module(conv, is_test=is_test, name="spp")
+            print("spp input shape", conv.shape)
+            conv = self._spp_module(conv, is_test=is_test, name="spp")
 
-        if self.drop_block and is_first:
+        if self.drop_block and (is_first or conv_block_num == 0):
+            print("drop_block input shape", conv.shape)
             conv = DropBlock(
                 conv,
                 block_size=self.block_size,
