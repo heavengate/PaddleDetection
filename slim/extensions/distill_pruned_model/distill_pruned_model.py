@@ -56,14 +56,14 @@ def split_distill(split_output_names, weight):
             name))
     s_x0, s_y0, s_w0, s_h0, s_obj0, s_cls0 = student_var[0:6]
     s_x1, s_y1, s_w1, s_h1, s_obj1, s_cls1 = student_var[6:12]
-    s_x2, s_y2, s_w2, s_h2, s_obj2, s_cls2 = student_var[12:18]
+    # s_x2, s_y2, s_w2, s_h2, s_obj2, s_cls2 = student_var[12:18]
     teacher_var = []
     for name in split_output_names:
         teacher_var.append(fluid.default_main_program().global_block().var(
             'teacher_' + name))
     t_x0, t_y0, t_w0, t_h0, t_obj0, t_cls0 = teacher_var[0:6]
     t_x1, t_y1, t_w1, t_h1, t_obj1, t_cls1 = teacher_var[6:12]
-    t_x2, t_y2, t_w2, t_h2, t_obj2, t_cls2 = teacher_var[12:18]
+    # t_x2, t_y2, t_w2, t_h2, t_obj2, t_cls2 = teacher_var[12:18]
 
     def obj_weighted_reg(sx, sy, sw, sh, tx, ty, tw, th, tobj):
         loss_x = fluid.layers.sigmoid_cross_entropy_with_logits(
@@ -96,22 +96,25 @@ def split_distill(split_output_names, weight):
                                          t_w0, t_h0, t_obj0)
     distill_reg_loss1 = obj_weighted_reg(s_x1, s_y1, s_w1, s_h1, t_x1, t_y1,
                                          t_w1, t_h1, t_obj1)
-    distill_reg_loss2 = obj_weighted_reg(s_x2, s_y2, s_w2, s_h2, t_x2, t_y2,
-                                         t_w2, t_h2, t_obj2)
+    # distill_reg_loss2 = obj_weighted_reg(s_x2, s_y2, s_w2, s_h2, t_x2, t_y2,
+    #                                      t_w2, t_h2, t_obj2)
     distill_reg_loss = fluid.layers.sum(
-        [distill_reg_loss0, distill_reg_loss1, distill_reg_loss2])
+        # [distill_reg_loss0, distill_reg_loss1, distill_reg_loss2])
+        [distill_reg_loss0, distill_reg_loss1])
 
     distill_cls_loss0 = obj_weighted_cls(s_cls0, t_cls0, t_obj0)
     distill_cls_loss1 = obj_weighted_cls(s_cls1, t_cls1, t_obj1)
-    distill_cls_loss2 = obj_weighted_cls(s_cls2, t_cls2, t_obj2)
+    # distill_cls_loss2 = obj_weighted_cls(s_cls2, t_cls2, t_obj2)
     distill_cls_loss = fluid.layers.sum(
-        [distill_cls_loss0, distill_cls_loss1, distill_cls_loss2])
+        # [distill_cls_loss0, distill_cls_loss1, distill_cls_loss2])
+        [distill_cls_loss0, distill_cls_loss1])
 
     distill_obj_loss0 = obj_loss(s_obj0, t_obj0)
     distill_obj_loss1 = obj_loss(s_obj1, t_obj1)
-    distill_obj_loss2 = obj_loss(s_obj2, t_obj2)
+    # distill_obj_loss2 = obj_loss(s_obj2, t_obj2)
     distill_obj_loss = fluid.layers.sum(
-        [distill_obj_loss0, distill_obj_loss1, distill_obj_loss2])
+        # [distill_obj_loss0, distill_obj_loss1, distill_obj_loss2])
+        [distill_obj_loss0, distill_obj_loss1])
     loss = (distill_reg_loss + distill_cls_loss + distill_obj_loss) * weight
     return loss
 
@@ -188,7 +191,7 @@ def main():
     data_name_map = {
         'target0': 'target0',
         'target1': 'target1',
-        'target2': 'target2',
+        # 'target2': 'target2',
         'image': 'image',
         'gt_bbox': 'gt_bbox',
         'gt_class': 'gt_class',
@@ -202,9 +205,9 @@ def main():
         'strided_slice_4.tmp_0', 'transpose_0.tmp_0', 'strided_slice_5.tmp_0',
         'strided_slice_6.tmp_0', 'strided_slice_7.tmp_0',
         'strided_slice_8.tmp_0', 'strided_slice_9.tmp_0', 'transpose_2.tmp_0',
-        'strided_slice_10.tmp_0', 'strided_slice_11.tmp_0',
-        'strided_slice_12.tmp_0', 'strided_slice_13.tmp_0',
-        'strided_slice_14.tmp_0', 'transpose_4.tmp_0'
+        # 'strided_slice_10.tmp_0', 'strided_slice_11.tmp_0',
+        # 'strided_slice_12.tmp_0', 'strided_slice_13.tmp_0',
+        # 'strided_slice_14.tmp_0', 'transpose_4.tmp_0'
     ]
 
     assert cfg.use_fine_grained_loss, \
