@@ -54,6 +54,7 @@ class YOLOv3Head(object):
 
     def __init__(self,
                  conv_block_num=2,
+                 scale=1.0,
                  norm_decay=0.,
                  num_classes=80,
                  anchors=[[10, 13], [16, 30], [33, 23], [30, 61], [62, 45],
@@ -78,6 +79,7 @@ class YOLOv3Head(object):
                  scale_x_y=1.0,
                  clip_bbox=True):
         self.conv_block_num = conv_block_num
+        self.scale = scale
         self.norm_decay = norm_decay
         self.num_classes = num_classes
         self.anchor_masks = anchor_masks
@@ -339,7 +341,7 @@ class YOLOv3Head(object):
                 block = fluid.layers.concat(input=[route, block], axis=1)
             route, tip = self._detection_block(
                 block,
-                channel=64 * (2**out_layer_num) // (2**i),
+                channel=int(64 * (2**out_layer_num) // (2**i) * self.scale),
                 is_first=i == 0,
                 is_test=(not is_train),
                 conv_block_num=self.conv_block_num,
