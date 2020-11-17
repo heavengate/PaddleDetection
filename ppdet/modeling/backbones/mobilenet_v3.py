@@ -585,8 +585,6 @@ class MobileNetV3PPYOLO(MobileNetV3):
                              is need for pretrained model got using distillation(default as
                              [1.0, 1.0, 1.0, 1.0, 1.0]).
         freeze_norm (bool): freeze normalization layers.
-        multiplier (float): The multiplier by which to reduce the convolution expansion and
-                            number of channels.
     """
     __shared__ = ['norm_type']
 
@@ -600,8 +598,7 @@ class MobileNetV3PPYOLO(MobileNetV3):
             norm_decay=0.0,
             extra_block_filters=[],
             lr_mult_list=[1.0, 1.0, 1.0, 1.0, 1.0],
-            freeze_norm=False,
-            multiplier=1.0):
+            freeze_norm=False):
         super(MobileNetV3PPYOLO, self).__init__(
             scale=scale,
             model_name=model_name,
@@ -611,15 +608,68 @@ class MobileNetV3PPYOLO(MobileNetV3):
             extra_block_filters=extra_block_filters,
             lr_mult_list=lr_mult_list,
             feature_maps=feature_maps,
-            freeze_norm=freeze_norm,
-            multiplier=multiplier)
+            freeze_norm=freeze_norm)
+        self.final_channel = self.cfg[-1][2]
         if model_name == "large":
-            self.cfg[-1] = [5, 960, 160, False, 'leaky_relu', 1]
+            # self.cfg[-1] = [5, 960, 160, False, 'leaky_relu', 1]
+            self.cfg = self.cfg[:-2]
         elif model_name == "small":
-            self.cfg[-1] = [5, 576, 96, False, 'leaky_relu', 1]
+            # self.cfg[-1] = [5, 576, 96, False, 'leaky_relu', 1]
+            self.cfg = self.cfg[:-2]
         else:
             raise NotImplementedError
 
-        if multiplier != 1.0:
-            self.cfg[-1][1] = int(self.cfg[-1][1] * multiplier)
-            self.cfg[-1][2] = int(self.cfg[-1][2] * multiplier)
+    def __call__(self, input):
+        scale = self.scale
+        inplanes = self.inplanes
+        cfg = self.cfg
+        blocks = []
+
+        #conv1
+        conv = self._conv_bn_layer(
+            input,
+            filter_size=3,
+            num_filters=self._make_divisible(inplanes * scale),
+            stride=2,
+            padding=1,
+            num_groups=1,
+            if_act=True,
+            act='hard_swish',
+            name='conv1')
+        i = 0
+        inplanes = self._make_divisible(inplanes * scale)
+        for layer_cfg in cfg:
+            if layer_cfg[5] == 2:
+                self.block_stride += 1
+                if self.block_stride in self.feature_maps:
+                    self.end_points.append(conv)
+
+            conv = self._residual_unit(
+                input=conv,
+                num_in_filter=inplanes,
+                num_mid_filter=self._make_divisible(scale * layer_cfg[1]),
+                num_out_filter=self._make_divisible(scale * layer_cfg[2]),
+                act=layer_cfg[4],
+                stride=layer_cfg[5],
+                filter_size=layer_cfg[0],
+                use_se=layer_cfg[3],
+                name='conv' + str(i + 2))
+            inplanes = self._make_divisible(scale * layer_cfg[2])
+            i += 1
+            self.curr_stage += 1
+
+        conv = self._conv_bn_layer(
+            input=conv,
+            filter_size=1,
+            num_filters=self._make_divisible(scale * self.final_channel),
+            stride=1,
+            padding=0,
+            num_groups=1,
+            if_act=True,
+            act='leaky_relu',
+            name='conv_final')
+        self.end_points.append(conv)
+
+        res = OrderedDict([('mv3_{}'.format(idx), self.end_points[idx])
+                           for idx, feat_idx in enumerate(self.feature_maps)])
+        return res
