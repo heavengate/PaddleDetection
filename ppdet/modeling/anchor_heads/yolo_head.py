@@ -785,24 +785,89 @@ class PPYOLOTinyHead(YOLOv3Head):
 
         # get last out_layer_num blocks in reverse order
         out_layer_num = len(self.anchor_masks)
-        blocks = input[-1:-out_layer_num - 1:-1]
+        inputs = input[-out_layer_num:]
 
-        route = None
-        for i, block in enumerate(blocks):
-            if i > 0:  # perform concat in first 2 detection_block
-                block = fluid.layers.concat(input=[route, block], axis=1)
-            route, tip = self._detection_block(
-                block,
-                channel=self.detection_block_channels[i],
-                is_first=i == 0,
-                is_test=(not is_train),
-                name=self.prefix_name + "yolo_block.{}".format(i))
+        if self.use_spp:
+            conv = inputs[-1]
+            c = conv.shape[1]
+            conv = self._spp_module(conv, name="spp")
+            inputs[-1] = self._conv_bn(
+                conv,
+                c,
+                filter_size=1,
+                stride=1,
+                padding=0,
+                name='yolo_head.spp.conv')
 
-            # out channel number = mask_num * (5 + class_num)
+        if self.drop_block:
+            inputs[-1] = DropBlock(
+                conv,
+                block_size=self.block_size,
+                keep_prob=self.keep_prob,
+                is_test=not is_train)
+
+        # fpn convs
+        fpn_outs = []
+        for i in range(out_layer_num):
+            conv = self._conv_bn(
+                inputs[i],
+                ch_out=self.detection_block_channels[i],
+                filter_size=1,
+                stride=1,
+                padding=0,
+                groups=1,
+                name='yolo_head.fpn{}.0'.format(i))
+            conv = self._conv_bn(
+                conv,
+                self.detection_block_channels[i],
+                filter_size=5,
+                stride=1,
+                padding=2,
+                groups=self.detection_block_channels[i],
+                name='yolo_head.fpn{}.1'.format(i))
+            fpn_outs.append(conv)
+
+        # fpn top-down path
+        for i in range(out_layer_num - 1, 0, -1):
+            upsample = self._upsample(fpn_outs[i])
+            # fpn_outs[i-1] = fluid.layers.concat([upsample, fpn_outs[i-1]], axis=1)
+            fpn_outs[i-1] += upsample
+
+        # pan convs
+        pan_outs = []
+        for i in range(out_layer_num):
+            conv = self._conv_bn(
+                fpn_outs[i],
+                self.detection_block_channels[i],
+                filter_size=1,
+                stride=1,
+                padding=0,
+                name='yolo_head.pan{}.0'.format(i))
+            conv = self._conv_bn(
+                conv,
+                self.detection_block_channels[i],
+                filter_size=5,
+                stride=1,
+                padding=2,
+                groups=self.detection_block_channels[i],
+                name='yolo_head.pan{}.1'.format(i))
+            pan_outs.append(conv)
+
+        # pan down-top path
+        for i in range(0, out_layer_num-1):
+            downsample = self._upsample(pan_outs[i], scale=0.5)
+            # pan_outs[i+1] = fluid.layers.concat([downsample, pan_outs[i+1]], axis=1)
+            pan_outs[i+1] += downsample
+
+        # output layer
+        if self.iou_aware:
+            num_filters = len(self.anchor_masks[i]) * (self.num_classes + 6)
+        else:
             num_filters = len(self.anchor_masks[i]) * (self.num_classes + 5)
-            with fluid.name_scope('yolo_output'):
+        with fluid.name_scope('yolo_output'):
+            for i, pan_out in enumerate(pan_outs):
                 block_out = fluid.layers.conv2d(
-                    input=tip,
+                    input=pan_out,
                     num_filters=num_filters,
                     filter_size=1,
                     stride=1,
@@ -817,16 +882,50 @@ class PPYOLOTinyHead(YOLOv3Head):
                         "yolo_output.{}.conv.bias".format(i)))
                 outputs.append(block_out)
 
-            if i < len(blocks) - 1:
-                # upsample
-                route = self._conv_bn(
-                    input=route,
-                    ch_out=self.detection_block_channels[i],
-                    filter_size=1,
-                    stride=1,
-                    padding=0,
-                    name=self.prefix_name + "yolo_transition.{}".format(i))
-                route = self._upsample(route)
-
         return outputs
+            
+        # blocks = input[-1:-out_layer_num - 1:-1]
+        #
+        # route = None
+        # for i, block in enumerate(blocks):
+        #     if i > 0:  # perform concat in first 2 detection_block
+        #         block = fluid.layers.concat(input=[route, block], axis=1)
+        #     route, tip = self._detection_block(
+        #         block,
+        #         channel=self.detection_block_channels[i],
+        #         is_first=i == 0,
+        #         is_test=(not is_train),
+        #         name=self.prefix_name + "yolo_block.{}".format(i))
+        #
+        #     # out channel number = mask_num * (5 + class_num)
+        #     num_filters = len(self.anchor_masks[i]) * (self.num_classes + 5)
+        #     with fluid.name_scope('yolo_output'):
+        #         block_out = fluid.layers.conv2d(
+        #             input=tip,
+        #             num_filters=num_filters,
+        #             filter_size=1,
+        #             stride=1,
+        #             padding=0,
+        #             act=None,
+        #             param_attr=ParamAttr(
+        #                 name=self.prefix_name +
+        #                 "yolo_output.{}.conv.weights".format(i)),
+        #             bias_attr=ParamAttr(
+        #                 regularizer=L2Decay(0.),
+        #                 name=self.prefix_name +
+        #                 "yolo_output.{}.conv.bias".format(i)))
+        #         outputs.append(block_out)
+        #
+        #     if i < len(blocks) - 1:
+        #         # upsample
+        #         route = self._conv_bn(
+        #             input=route,
+        #             ch_out=self.detection_block_channels[i],
+        #             filter_size=1,
+        #             stride=1,
+        #             padding=0,
+        #             name=self.prefix_name + "yolo_transition.{}".format(i))
+        #         route = self._upsample(route)
+        #
+        # return outputs
 

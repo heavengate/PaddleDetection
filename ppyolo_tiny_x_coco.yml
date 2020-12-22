@@ -31,7 +31,7 @@ PPYOLOTinyHead:
   anchors: [[10, 15], [24, 36], [72, 42],
             [35, 87], [102, 96], [60, 170],
             [220, 125], [128, 222], [264, 266]]
-  detection_block_channels: [160, 128, 96]
+  detection_block_channels: [96, 96, 96]
   norm_decay: 0.
   scale_x_y: 1.05
   yolo_loss: YOLOv3Loss
@@ -46,7 +46,7 @@ PPYOLOTinyHead:
     score_threshold: 0.01
 
 YOLOv3Loss:
-  ignore_thresh: 0.7
+  ignore_thresh: 0.5
   scale_x_y: 1.05
   label_smooth: false
   use_fine_grained_loss: true
@@ -104,8 +104,8 @@ TrainReader:
     - !RandomExpand
       fill_value: [123.675, 116.28, 103.53]
       ratio: 2
-    - !RandomPerspective
-      border_value: [123.675, 116.28, 103.53]
+    # - !RandomPerspective
+    #   border_value: [123.675, 116.28, 103.53]
     - !RandomCrop {}
     - !RandomFlipImage
       is_normalized: false
