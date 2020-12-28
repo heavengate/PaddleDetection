@@ -882,7 +882,7 @@ class PPYOLOTinyHead(YOLOv3Head):
                         "yolo_output.{}.conv.bias".format(i)))
                 outputs.append(block_out)
 
-        return outputs
+        return outputs[-1: -out_layer_num-1: -1]
             
         # blocks = input[-1:-out_layer_num - 1:-1]
         #

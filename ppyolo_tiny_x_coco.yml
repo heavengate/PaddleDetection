@@ -33,7 +33,7 @@ PPYOLOTinyHead:
             [220, 125], [128, 222], [264, 266]]
   detection_block_channels: [96, 96, 96]
   norm_decay: 0.
-  scale_x_y: 1.05
+  scale_x_y: 3.05
   yolo_loss: YOLOv3Loss
   spp: true
   drop_block: true
@@ -47,7 +47,7 @@ PPYOLOTinyHead:
 
 YOLOv3Loss:
   ignore_thresh: 0.5
-  scale_x_y: 1.05
+  scale_x_y: 3.05
   label_smooth: false
   use_fine_grained_loss: true
   iou_loss: IouLoss

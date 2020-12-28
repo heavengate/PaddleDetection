@@ -258,49 +258,59 @@ class Gt2YoloTarget(BaseOperator):
                     gi = int(gx * grid_w)
                     gj = int(gy * grid_h)
 
-                    # gtbox should be regresed in this layes if best match 
-                    # anchor index in anchor mask of this layer
-                    if best_idx in mask:
-                        best_n = mask.index(best_idx)
+                    for scale_i in [-1, 0, 1]:
+                        for scale_j in [-1, 0, 1]:
+                            scale_gi = gi + scale_i
+                            scale_gj = gj + scale_j
+                            if scale_gi < 0 or scale_gi >= grid_w or \
+                                    scale_gj < 0 or scale_gj >= grid_h:
+                                continue
+                            score_factor = 1. / (2 ** (abs(scale_i) + abs(scale_j)))
 
-                        # x, y, w, h, scale
-                        target[best_n, 0, gj, gi] = gx * grid_w - gi
-                        target[best_n, 1, gj, gi] = gy * grid_h - gj
-                        target[best_n, 2, gj, gi] = np.log(
-                            gw * w / self.anchors[best_idx][0])
-                        target[best_n, 3, gj, gi] = np.log(
-                            gh * h / self.anchors[best_idx][1])
-                        target[best_n, 4, gj, gi] = 2.0 - gw * gh
+                            # gtbox should be regresed in this layes if best match 
+                            # anchor index in anchor mask of this layer
+                            if best_idx in mask:
+                                best_n = mask.index(best_idx)
 
-                        # objectness record gt_score
-                        target[best_n, 5, gj, gi] = score
-
-                        # classification
-                        target[best_n, 6 + cls, gj, gi] = 1.
-
-                    # For non-matched anchors, calculate the target if the iou 
-                    # between anchor and gt is larger than iou_thresh
-                    if self.iou_thresh < 1:
-                        for idx, mask_i in enumerate(mask):
-                            if mask_i == best_idx: continue
-                            iou = jaccard_overlap(
-                                [0., 0., gw, gh],
-                                [0., 0., an_hw[mask_i, 0], an_hw[mask_i, 1]])
-                            if iou > self.iou_thresh and target[idx, 5, gj, gi] == 0.:
+                                if (scale_i == 0 and scale_j == 0) or target[best_n, 5, scale_gj, scale_gi] == 0:
                                 # x, y, w, h, scale
-                                target[idx, 0, gj, gi] = gx * grid_w - gi
-                                target[idx, 1, gj, gi] = gy * grid_h - gj
-                                target[idx, 2, gj, gi] = np.log(
-                                    gw * w / self.anchors[mask_i][0])
-                                target[idx, 3, gj, gi] = np.log(
-                                    gh * h / self.anchors[mask_i][1])
-                                target[idx, 4, gj, gi] = 2.0 - gw * gh
+                                    target[best_n, 0, scale_gj, scale_gi] = gx * grid_w - scale_gi
+                                    target[best_n, 1, scale_gj, scale_gi] = gy * grid_h - scale_gj
+                                    target[best_n, 2, scale_gj, scale_gi] = np.log(
+                                        gw * w / self.anchors[best_idx][0])
+                                    target[best_n, 3, scale_gj, scale_gi] = np.log(
+                                        gh * h / self.anchors[best_idx][1])
+                                    target[best_n, 4, scale_gj, scale_gi] = 2.0 - gw * gh
 
-                                # objectness record gt_score
-                                target[idx, 5, gj, gi] = score
+                                    # objectness record gt_score
+                                    target[best_n, 5, scale_gj, scale_gi] = score * score_factor
 
-                                # classification
-                                target[idx, 6 + cls, gj, gi] = 1.
+                                    # classification
+                                    target[best_n, 6 + cls, scale_gj, scale_gi] = 1.
+
+                            # For non-matched anchors, calculate the target if the iou 
+                            # between anchor and gt is larger than iou_thresh
+                            if self.iou_thresh < 1:
+                                for idx, mask_i in enumerate(mask):
+                                    if mask_i == best_idx: continue
+                                    iou = jaccard_overlap(
+                                        [0., 0., gw, gh],
+                                        [0., 0., an_hw[mask_i, 0], an_hw[mask_i, 1]])
+                                    if iou > self.iou_thresh and target[idx, 5, scale_gj, scale_gi] == 0.:
+                                        # x, y, w, h, scale
+                                        target[idx, 0, scale_gj, scale_gi] = gx * grid_w - scale_gi
+                                        target[idx, 1, scale_gj, scale_gi] = gy * grid_h - scale_gj
+                                        target[idx, 2, scale_gj, scale_gi] = np.log(
+                                            gw * w / self.anchors[mask_i][0])
+                                        target[idx, 3, scale_gj, scale_gi] = np.log(
+                                            gh * h / self.anchors[mask_i][1])
+                                        target[idx, 4, scale_gj, scale_gi] = 2.0 - gw * gh
+
+                                        # objectness record gt_score
+                                        target[idx, 5, scale_gj, scale_gi] = score * score_factor
+
+                                        # classification
+                                        target[idx, 6 + cls, scale_gj, scale_gi] = 1.
                 sample['target{}'.format(i)] = target
         return samples
 
