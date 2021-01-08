@@ -729,14 +729,14 @@ class PPYOLOTinyHead(YOLOv3Head):
                 keep_prob=self.keep_prob,
                 is_test=is_test)
 
-        conv = self._conv_bn(
-            conv,
-            ch_out=channel,
-            filter_size=1,
-            stride=1,
-            padding=0,
-            groups=1,
-            name='{}.0'.format(name))
+        # conv = self._conv_bn(
+        #     conv,
+        #     ch_out=channel,
+        #     filter_size=1,
+        #     stride=1,
+        #     padding=0,
+        #     groups=1,
+        #     name='{}.0'.format(name))
         conv = self._conv_bn(
             conv,
             channel,
@@ -789,8 +789,17 @@ class PPYOLOTinyHead(YOLOv3Head):
 
         route = None
         for i, block in enumerate(blocks):
+            block = self._conv_bn(
+                block,
+                ch_out=self.detection_block_channels[i],
+                filter_size=1,
+                stride=1,
+                padding=0,
+                groups=1,
+                name='{}.0'.format("tranition.{}".format(i)))
             if i > 0:  # perform concat in first 2 detection_block
-                block = fluid.layers.concat(input=[route, block], axis=1)
+                # block = fluid.layers.concat(input=[route, block], axis=1)
+                block = route + block
             route, tip = self._detection_block(
                 block,
                 channel=self.detection_block_channels[i],
@@ -819,13 +828,6 @@ class PPYOLOTinyHead(YOLOv3Head):
 
             if i < len(blocks) - 1:
                 # upsample
-                route = self._conv_bn(
-                    input=route,
-                    ch_out=self.detection_block_channels[i],
-                    filter_size=1,
-                    stride=1,
-                    padding=0,
-                    name=self.prefix_name + "yolo_transition.{}".format(i))
                 route = self._upsample(route)
 
         return outputs
