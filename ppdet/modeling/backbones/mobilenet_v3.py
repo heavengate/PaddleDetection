@@ -89,21 +89,21 @@ class MobileNetV3(object):
         if model_name == "large":
             self.cfg = [
                 # kernel_size, expand, channel, se_block, act_mode, stride
-                [3, 16, 16, False, 'relu', 1],
-                [3, 64, 24, False, 'relu', 2],
-                [3, 72, 24, False, 'relu', 1],
-                [5, 72, 40, True, 'relu', 2],
-                [5, 120, 40, True, 'relu', 1],
-                [5, 120, 40, True, 'relu', 1],
-                [3, 240, 80, False, 'hard_swish', 2],
-                [3, 200, 80, False, 'hard_swish', 1],
-                [3, 184, 80, False, 'hard_swish', 1],
-                [3, 184, 80, False, 'hard_swish', 1],
-                [3, 480, 112, True, 'hard_swish', 1],
-                [3, 672, 112, True, 'hard_swish', 1],
-                [5, 672, 160, True, 'hard_swish', 2],
-                [5, 960, 160, True, 'hard_swish', 1],
-                [5, 960, 160, True, 'hard_swish', 1],
+                [3, 16, 16, False, 'leaky_relu', 1],
+                [3, 64, 24, False, 'leaky_relu', 2],
+                [3, 72, 24, False, 'leaky_relu', 1],
+                [5, 72, 40, True, 'leaky_relu', 2],
+                [5, 120, 40, True, 'leaky_relu', 1],
+                [5, 120, 40, True, 'leaky_relu', 1],
+                [3, 240, 80, False, 'leaky_relu', 2],
+                [3, 200, 80, False, 'leaky_relu', 1],
+                [3, 184, 80, False, 'leaky_relu', 1],
+                [3, 184, 80, False, 'leaky_relu', 1],
+                [3, 480, 112, True, 'leaky_relu', 1],
+                [3, 672, 112, True, 'leaky_relu', 1],
+                [5, 672, 160, True, 'leaky_relu', 2],
+                [5, 960, 160, True, 'leaky_relu', 1],
+                [5, 960, 160, True, 'leaky_relu', 1],
             ]
             self.cls_ch_squeeze = 960
             self.cls_ch_expand = 1280
@@ -306,12 +306,12 @@ class MobileNetV3(object):
                 use_cudnn=False,
                 name=name + '_depthwise')
 
-        if use_se:
-            with fluid.name_scope('se_block'):
-                conv1 = self._se_block(
-                    input=conv1,
-                    num_out_filter=num_mid_filter,
-                    name=name + '_se')
+        # if use_se:
+        #     with fluid.name_scope('se_block'):
+        #         conv1 = self._se_block(
+        #             input=conv1,
+        #             num_out_filter=num_mid_filter,
+        #             name=name + '_se')
 
         conv2 = self._conv_bn_layer(
             input=conv1,
@@ -322,6 +322,7 @@ class MobileNetV3(object):
             if_act=False,
             name=name + '_linear')
         if num_in_filter != num_out_filter or stride != 1:
+            return fluid.layers.dropout(conv2, 0.1, dropout_implementation='upscale_in_train')
             return conv2
         else:
             return fluid.layers.elementwise_add(x=input_data, y=conv2, act=None)
