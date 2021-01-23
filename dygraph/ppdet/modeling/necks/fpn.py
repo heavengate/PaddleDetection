@@ -83,10 +83,10 @@ class FPN(Layer):
         for i in range(1, num_levels):
             lvl = num_levels - i
             upsample = F.interpolate(
-                laterals[lvl],
+                laterals[idx],
                 scale_factor=2.,
                 mode='nearest', )
-            laterals[lvl - 1] = laterals[lvl - 1] + upsample
+            laterals[idx - 1] += upsample
 
         fpn_output = []
         for lvl in range(num_levels):

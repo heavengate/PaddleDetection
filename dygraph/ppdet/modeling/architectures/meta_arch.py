@@ -17,14 +17,13 @@ class BaseArch(nn.Layer):
 
     def forward(self, inputs):
         self.inputs = inputs
-        mode = 'train' if self.training else 'infer'
-        self.inputs['mode'] = mode
         self.model_arch()
 
-        if mode == 'train':
-            return self.get_loss()
+        if self.training:
+            out = self.get_loss()
         else:
-            return self.get_pred()
+            out = self.get_pred()
+        return out
 
     def build_inputs(self, data, input_def):
         inputs = {}

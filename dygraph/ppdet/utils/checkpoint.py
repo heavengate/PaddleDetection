@@ -23,6 +23,7 @@ import time
 import re
 import numpy as np
 import paddle
+import paddle.nn as nn
 from .download import get_weights_path
 
 from .logger import setup_logger
@@ -35,10 +36,12 @@ def is_url(path):
     Args:
         path (string): URL string or not.
     """
-    return path.startswith('http://') or path.startswith('https://')
+    return path.startswith('http://') \
+            or path.startswith('https://') \
+            or path.startswith('ppdet://')
 
 
-def get_weight_path(path):
+def get_weights_path_dist(path):
     env = os.environ
     if 'PADDLE_TRAINERS_NUM' in env and 'PADDLE_TRAINER_ID' in env:
         trainer_id = int(env['PADDLE_TRAINER_ID'])
@@ -79,7 +82,7 @@ def _strip_postfix(path):
 
 def load_weight(model, weight, optimizer=None):
     if is_url(weight):
-        weight = get_weight_path(weight)
+        weight = get_weights_path_dist(weight)
 
     path = _strip_postfix(weight)
     pdparam_path = path + '.pdparams'
@@ -90,18 +93,18 @@ def load_weight(model, weight, optimizer=None):
     param_state_dict = paddle.load(pdparam_path)
     model.set_dict(param_state_dict)
 
+    last_epoch = 0
     if optimizer is not None and os.path.exists(path + '.pdopt'):
-        last_epoch = 0
         optim_state_dict = paddle.load(path + '.pdopt')
-        # to slove resume bug, will it be fixed in paddle 2.0
+        # to solve resume bug, will it be fixed in paddle 2.0
         for key in optimizer.state_dict().keys():
             if not key in optim_state_dict.keys():
                 optim_state_dict[key] = optimizer.state_dict()[key]
         if 'last_epoch' in optim_state_dict:
             last_epoch = optim_state_dict.pop('last_epoch')
         optimizer.set_state_dict(optim_state_dict)
-        return last_epoch
-    return
+
+    return last_epoch
 
 
 def load_pretrain_weight(model,
@@ -110,7 +113,7 @@ def load_pretrain_weight(model,
                          weight_type='pretrain'):
     assert weight_type in ['pretrain', 'finetune']
     if is_url(pretrain_weight):
-        pretrain_weight = get_weight_path(pretrain_weight)
+        pretrain_weight = get_weights_path_dist(pretrain_weight)
 
     path = _strip_postfix(pretrain_weight)
     if not (os.path.isdir(path) or os.path.isfile(path) or
@@ -130,6 +133,9 @@ def load_pretrain_weight(model,
                     weight_name, pre_state_dict[weight_name].shape))
                 param_state_dict[key] = pre_state_dict[weight_name]
             else:
+                if 'backbone' in key:
+                    logger.info('Lack weight: {}, structure name: {}'.format(
+                        weight_name, key))
                 param_state_dict[key] = model_dict[key]
         model.set_dict(param_state_dict)
         return
@@ -150,7 +156,7 @@ def load_pretrain_weight(model,
 def save_model(model, optimizer, save_dir, save_name, last_epoch):
     """
     save model into disk.
-    
+
     Args:
         model (paddle.nn.Layer): the Layer instalce to save parameters.
         optimizer (paddle.optimizer.Optimizer): the Optimizer instance to
@@ -159,10 +165,17 @@ def save_model(model, optimizer, save_dir, save_name, last_epoch):
         save_name (str): the path to be saved.
         last_epoch (int): the epoch index.
     """
+    if paddle.distributed.get_rank() != 0:
+        return
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     save_path = os.path.join(save_dir, save_name)
-    paddle.save(model.state_dict(), save_path + ".pdparams")
+    if isinstance(model, nn.Layer):
+        paddle.save(model.state_dict(), save_path + ".pdparams")
+    else:
+        assert isinstance(model,
+                          dict), 'model is not a instance of nn.layer or dict'
+        paddle.save(model, save_path + ".pdparams")
     state_dict = optimizer.state_dict()
     state_dict['last_epoch'] = last_epoch
     paddle.save(state_dict, save_path + ".pdopt")

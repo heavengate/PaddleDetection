@@ -87,7 +87,6 @@ class MaskRCNN(BaseArch):
 
         if self.neck is not None:
             body_feats = self.neck(body_feats)
-
             for v in body_feats:
                 print('fpn ', v.shape, np.sum(np.abs(v.numpy())))
 

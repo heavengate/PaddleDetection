@@ -89,7 +89,6 @@ class MaskHead(nn.Layer):
                  share_bbox_feat=False):
         super(MaskHead, self).__init__()
         self.num_classes = num_classes
-
         self.roi_extractor = roi_extractor
         if isinstance(roi_extractor, dict):
             self.roi_extractor = RoIAlign(**roi_extractor)
@@ -208,7 +207,7 @@ class MaskHead(nn.Layer):
         return mask_out
 
     def forward(self, body_feats, rois, rois_num, inputs=None):
-        if inputs['mode'] == 'train':
+        if self.training:
             return self.forward_train(body_feats, rois, rois_num, inputs)
         else:
             im_scale = inputs['scale_factor']
